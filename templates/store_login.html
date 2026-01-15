@@ -1,0 +1,59 @@
+{# =========================================================
+  店舗側ログイン画面
+  - 管理者ログインとは別ルートを想定
+========================================================= #}
+{% extends "store_base.html" %}
+
+{% block title %}店舗ログイン{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-md px-4 py-10">
+  <header class="mb-6 text-center">
+    <h1 class="text-2xl font-bold tracking-tight">店舗ログイン</h1>
+    <p class="mt-2 text-sm text-slate-600">
+      店舗アカウントでログインしてください
+    </p>
+  </header>
+
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <form method="post" class="space-y-4">
+      <div>
+        <label for="email" class="block text-sm font-medium text-slate-700">ログインID</label>
+        <input
+          id="login_id"
+          name="login_id"
+          type="text"
+          autocomplete="login_id"
+          required
+          class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+          placeholder=""
+        />
+      </div>
+
+      <div>
+        <label for="password" class="block text-sm font-medium text-slate-700">パスワード</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+          class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+          placeholder="********"
+        />
+      </div>
+
+      <button
+        type="submit"
+        class="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+      >
+        ログイン
+      </button>
+    </form>
+  </div>
+
+  <p class="mt-6 text-center text-xs text-slate-500">
+    ※ 店舗専用画面です
+  </p>
+</section>
+{% endblock %}

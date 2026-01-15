@@ -1,0 +1,313 @@
+{# templates/store_home.html #}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto p-4">
+  <!-- =========================
+       タイトル
+       ========================= -->
+  <h1 class="text-2xl font-bold mb-4">QRコード読み取り</h1>
+
+  <!-- =========================
+       操作ボタン
+       ========================= -->
+  <div class="flex flex-wrap gap-2 mb-4">
+    <button
+      id="btnStart"
+      class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+      type="button"
+    >
+      カメラ起動
+    </button>
+
+    <button
+      id="btnStop"
+      class="px-4 py-2 rounded bg-gray-600 text-white hover:bg-gray-700"
+      type="button"
+      disabled
+    >
+      停止
+    </button>
+
+    <button
+      id="btnRetry"
+      class="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+      type="button"
+      disabled
+    >
+      もう一度読む
+    </button>
+  </div>
+
+  <!-- =========================
+       ステータス表示
+       ========================= -->
+  <div class="mb-3">
+    <p class="text-sm text-gray-600">状態：</p>
+    <p id="status" class="font-mono text-sm bg-gray-100 p-2 rounded">
+      未起動
+    </p>
+  </div>
+
+  <!-- =========================
+       カメラ表示（video）
+       ========================= -->
+  <div class="rounded-lg overflow-hidden shadow bg-black">
+    <video
+      id="video"
+      class="w-full h-auto"
+      autoplay
+      playsinline
+      muted
+    ></video>
+  </div>
+
+  <!-- =========================
+       jsQRフォールバック用（非表示 canvas）
+       ========================= -->
+  <canvas id="canvas" class="hidden"></canvas>
+
+  <!-- =========================
+       読み取り結果
+       ========================= -->
+  <div class="mt-4">
+    <p class="text-sm text-gray-600 mb-1">読み取り結果：</p>
+    <div id="resultBox" class="p-3 rounded bg-gray-50 border">
+      <span class="text-gray-400">まだ読み取っていません</span>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+<script>
+  // ==========================================================
+  // 画面要素
+  // ==========================================================
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+
+  const statusEl = document.getElementById("status");
+  const resultBox = document.getElementById("resultBox");
+
+  const btnStart = document.getElementById("btnStart");
+  const btnStop = document.getElementById("btnStop");
+  const btnRetry = document.getElementById("btnRetry");
+
+  const manualInput = document.getElementById("manualInput");
+  const btnManualSend = document.getElementById("btnManualSend");
+
+  // ==========================================================
+  // 状態管理
+  // ==========================================================
+  let stream = null;
+  let scanning = false;
+  let rafId = null;
+
+  // ==========================================================
+  // 表示用ユーティリティ
+  // ==========================================================
+  function setStatus(msg) {
+    statusEl.textContent = msg;
+  }
+
+  function setResult(htmlText) {
+    resultBox.innerHTML = htmlText;
+  }
+
+  function lockButtons(isRunning) {
+    btnStart.disabled = isRunning;
+    btnStop.disabled = !isRunning;
+    btnRetry.disabled = isRunning; // 読み取りが終わったら retry を有効化したいので後で調整
+  }
+
+  // ==========================================================
+  // カメラ起動
+  // ==========================================================
+  async function startCamera() {
+    try {
+      setStatus("カメラを起動しています…");
+
+      // 背面カメラ優先（モバイル）
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+
+      video.srcObject = stream;
+      await video.play();
+
+      scanning = true;
+      lockButtons(true);
+      btnRetry.disabled = true;
+
+      setStatus("読み取り待機中…（QRをカメラに写してください）");
+
+      // まずは標準API BarcodeDetector が使えるか確認
+      if ("BarcodeDetector" in window) {
+        scanWithBarcodeDetector();
+      } else {
+        scanWithJsQR();
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus("カメラ起動に失敗しました（権限/HTTPS/端末対応を確認）");
+      setResult(`<span class="text-red-600">エラー：${escapeHtml(String(err))}</span>`);
+      stopCamera();
+    }
+  }
+
+  // ==========================================================
+  // カメラ停止
+  // ==========================================================
+  function stopCamera() {
+    scanning = false;
+
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+    }
+
+    video.srcObject = null;
+    lockButtons(false);
+    setStatus("停止しました");
+  }
+
+  // ==========================================================
+  // 読み取り成功時：Flaskへ送信
+  // ==========================================================
+  async function sendToFlask(qrText) {
+    setStatus("読み取り成功 → サーバへ送信中…");
+    setResult(`<div class="font-mono break-words">${escapeHtml(qrText)}</div>`);
+
+    try {
+      const res = await fetch("{{ url_for('scan_coupon') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qr_text: qrText }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        const msg = data.message || "送信に失敗しました";
+        setStatus("送信エラー");
+        setResult(`
+          <div class="text-red-600">
+            <p class="font-bold">送信に失敗</p>
+            <p class="text-sm">${escapeHtml(msg)}</p>
+          </div>
+        `);
+        return;
+      }
+
+      setStatus("送信完了");
+      setResult(`
+        <div>
+          <p class="font-bold text-emerald-700">OK：クーポンが承認されました</p>
+        </div>
+      `);
+    } catch (err) {
+      console.error(err);
+      setStatus("通信エラー");
+      setResult(`<span class="text-red-600">通信エラー：${escapeHtml(String(err))}</span>`);
+    } finally {
+      // 読み取りは一旦止める（連続読取にしたいならここを変える）
+      stopCamera();
+      btnRetry.disabled = false;
+    }
+  }
+
+  // ==========================================================
+  // 方式1：BarcodeDetector（対応ブラウザ向け）
+  // ==========================================================
+  async function scanWithBarcodeDetector() {
+    // QRコードのみを対象にする
+    const detector = new BarcodeDetector({ formats: ["qr_code"] });
+
+    const loop = async () => {
+      if (!scanning) return;
+
+      try {
+        const barcodes = await detector.detect(video);
+        if (barcodes && barcodes.length > 0) {
+          const text = barcodes[0].rawValue || "";
+          if (text) {
+            scanning = false; // 二重検出防止
+            await sendToFlask(text);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        // 失敗してもループ継続
+      }
+
+      rafId = requestAnimationFrame(loop);
+    };
+
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ==========================================================
+  // 方式2：jsQR（フォールバック）
+  // ==========================================================
+  function scanWithJsQR() {
+    const loop = () => {
+      if (!scanning) return;
+
+      // video のサイズを取得して canvas に転写
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+
+      if (w && h) {
+        canvas.width = w;
+        canvas.height = h;
+        ctx.drawImage(video, 0, 0, w, h);
+
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const code = jsQR(imageData.data, w, h);
+
+        if (code && code.data) {
+          scanning = false; // 二重検出防止
+          sendToFlask(code.data);
+          return;
+        }
+      }
+
+      rafId = requestAnimationFrame(loop);
+    };
+
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ==========================================================
+  // HTMLエスケープ（表示崩れ/事故防止）
+  // ==========================================================
+  function escapeHtml(str) {
+    return str
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  // ==========================================================
+  // ボタンイベント
+  // ==========================================================
+  btnStart.addEventListener("click", startCamera);
+  btnStop.addEventListener("click", stopCamera);
+
+  btnRetry.addEventListener("click", () => {
+    setResult(`<span class="text-gray-400">まだ読み取っていません</span>`);
+    startCamera();
+  });
+</script>
+{% endblock %}

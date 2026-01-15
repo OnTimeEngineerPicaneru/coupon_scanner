@@ -1,0 +1,137 @@
+{# =========================================================
+  base.html
+  ---------------------------------------------------------
+  ・全ページ共通のレイアウト
+  ・TailwindCSS を CDN で読み込み
+  ・header / nav / main / footer を定義
+  ・Jinja blocks:
+      - title
+      - content
+      - extra_head（必要なら）
+========================================================= #}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  {# -------------------------------------------------------
+    ページタイトル
+    各ページで {% block title %} を上書き可能
+  -------------------------------------------------------- #}
+  <title>{% block title %}Webアプリ{% endblock %}</title>
+
+  {# -------------------------------------------------------
+    TailwindCSS（CDN版）
+    ※ 本番ではビルド版に差し替える想定
+  -------------------------------------------------------- #}
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  {# Tailwindの簡易カスタマイズ（任意） #}
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["ui-sans-serif", "system-ui"],
+          },
+        },
+      },
+    }
+  </script>
+
+  {# 各ページ固有の head 要素を追加したい場合用 #}
+  {% block extra_head %}{% endblock %}
+</head>
+
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  {# ======================================================
+    ヘッダー / ナビゲーション
+  ======================================================= #}
+  <header class="border-b border-slate-200 bg-white">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="flex h-16 items-center justify-between">
+        {# ロゴ・アプリ名 #}
+        <div class="flex items-center gap-3">
+          <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-white">
+            APP
+          </span>
+          <span class="text-lg font-semibold tracking-tight">
+            管理システム
+          </span>
+        </div>
+
+        {# デスクトップ用ナビ #}
+        <nav class="hidden items-center gap-4 md:flex">
+          {# ↓ 必要に応じてリンクを追加・削除 #}
+          <a
+            href="{{ url_for('master_home') }}"
+            class="text-sm font-medium text-slate-700 hover:text-slate-900"
+          >
+            ホーム
+          </a>
+          <a
+            href="{{ url_for('store_list') }}"
+            class="text-sm font-medium text-slate-700 hover:text-slate-900"
+          >
+            店舗一覧
+          </a>
+
+          {# ログアウト（実装時に有効化） #}
+          <a
+            href="{{ url_for('logout_master') }}"
+            class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+          >
+            ログアウト
+          </a>
+        </nav>
+
+        {# モバイル用メニューボタン（JSは後で追加） #}
+        <button
+          type="button"
+          class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white p-2 text-slate-700 hover:bg-slate-50 md:hidden"
+          aria-label="メニュー"
+        >
+          {# ハンバーガーアイコン #}
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+               viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  {# ======================================================
+    メインコンテンツ
+    各ページの内容は {% block content %} に描画
+  ======================================================= #}
+  <main class="flex-1">
+    {% block content %}
+    {# 各ページで上書きされる #}
+    {% endblock %}
+  </main>
+
+  {# ======================================================
+    フッター
+  ======================================================= #}
+  <footer class="mt-12 border-t border-slate-200 bg-white">
+    <div class="mx-auto max-w-7xl px-4 py-6">
+      <div class="flex flex-col gap-2 text-center text-xs text-slate-500 sm:flex-row sm:justify-between">
+        <p>
+          © {{ current_year|default(2026) }} 岐阜新聞社　デジタル統括局
+        </p>
+        <p>
+          QRコード管理システム
+        </p>
+      </div>
+    </div>
+  </footer>
+
+  {# ======================================================
+    共通JS（必要になったらここに追加）
+    例：モバイルメニュー開閉、アラート制御 等
+  ======================================================= #}
+</body>
+</html>
