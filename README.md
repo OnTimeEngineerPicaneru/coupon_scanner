@@ -1,0 +1,2 @@
+# coupon_scanner
+Web上でQRコードをスキャンして読み取る
